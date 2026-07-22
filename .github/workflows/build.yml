@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build (模拟器编译验证)
+    name: Build (真机版本)
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -22,28 +22,20 @@ jobs:
         run: |
           echo "=== Xcode ===" && xcodebuild -version
           echo "=== Swift ===" && swift --version
-          echo "=== XcodeGen ===" && xcodegen --version
 
       - name: 生成 Xcode 项目
         run: |
           xcodegen generate --spec project.yml
-          echo "---"
           xcodebuild -project njupt_ios.xcodeproj -list
 
-      - name: 编译 (模拟器)
+      - name: 编译 (真机, 无签名)
         run: |
-          # 先列出可用模拟器
-          echo "=== 可用模拟器 ==="
-          xcrun simctl list devices available | head -20
-          echo ""
-          # 用 generic destination 编译，避免设备名不匹配
           xcodebuild \
             -project njupt_ios.xcodeproj \
             -scheme njupt_ios \
-            -sdk iphonesimulator \
+            -sdk iphoneos \
             -configuration Debug \
             -derivedDataPath DerivedData \
-            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -55,9 +47,26 @@ jobs:
             echo "✅ 编译成功！"
           else
             echo "❌ 编译失败！错误："
-            grep -nE "error:|fatal error:" build.log || echo "(未找到 error 行，可能是 XcodeGen 或配置问题)"
-            echo ""
-            echo "=== 警告 ==="
-            grep -nE "warning:" build.log | tail -20 || echo "(无警告)"
+            grep -nE "error:|fatal error:" build.log || echo "(未找到)"
             exit 1
           fi
+
+      - name: 打包 .app
+        run: |
+          APP_PATH=$(find DerivedData/Build/Products/Debug-iphoneos -name "*.app" -type d | head -1)
+          if [ -d "$APP_PATH" ]; then
+            echo "找到 App: $APP_PATH"
+            ls -la "$APP_PATH"
+            zip -r njupt_ios.zip "$APP_PATH"
+            echo "✅ 已打包"
+          else
+            echo "⚠️ 未找到 .app"
+            find DerivedData -name "*.app" -type d 2>/dev/null || echo "无 .app 文件"
+            exit 1
+          fi
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: njupt_ios_unsigned
+          path: njupt_ios.zip
