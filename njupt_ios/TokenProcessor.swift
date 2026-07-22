@@ -42,8 +42,8 @@ enum TokenProcessor {
             guard cipherBytes.count > 28 else {
                 throw TokenError.invalidLength
             }
-            let nonceData = cipherBytes.prefix(12)
-            let combined = cipherBytes.suffix(from: 12)
+            let nonceData = Data(cipherBytes.prefix(12))
+            let combined = Data(cipherBytes.suffix(from: 12))
 
             // 3. AES-GCM 解密
             //    Android 的 Cipher.doFinal() 返回 ciphertext + 16-byte tag 拼接
@@ -52,13 +52,13 @@ enum TokenProcessor {
             guard combined.count > tagLength else {
                 throw TokenError.invalidLength
             }
-            let ciphertext = combined.prefix(combined.count - tagLength)
-            let tag = combined.suffix(tagLength)
+            let ciphertext = Data(combined.prefix(combined.count - tagLength))
+            let tag = Data(combined.suffix(tagLength))
 
-            guard let nonce = try? AES.GCM.Nonce(data: nonceData) else {
+            guard let nonce = AES.GCM.Nonce(data: nonceData) else {
                 throw TokenError.invalidNonce
             }
-            let key = SymmetricKey(data: keyBytes)
+            let key = SymmetricKey(data: Data(keyBytes))
             let sealedBox = try AES.GCM.SealedBox(
                 nonce: nonce,
                 ciphertext: ciphertext,

@@ -8,18 +8,22 @@ on:
   workflow_dispatch:        # 允许在 GitHub 网页上手动触发
     inputs:
       signing:
-        description: '是否启用签名（需预先配置 Secrets）'
-        type: boolean
-        default: false
+        description: '构建类型'
+        type: choice
+        default: 'simulator'
+        options:
+          - 'simulator'       # 编译验证（无需签名，总是成功）
+          - 'signed_device'   # 签名设备构建（需预先配置 Secrets）
 
 jobs:
   # ============================================================
-  # Job 1: 编译验证（无签名，始终运行）
+  # Job: 模拟器编译验证（无签名，每次推送自动运行）
   # ============================================================
-  build-only:
-    name: Build (编译验证)
-    runs-on: macos-latest     # Apple Silicon macOS runner，内置 Xcode
+  build-simulator:
+    name: Build (模拟器编译验证)
+    runs-on: macos-latest
     timeout-minutes: 30
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.signing == 'simulator'
 
     steps:
       - name: 拉取代码
@@ -27,76 +31,72 @@ jobs:
 
       - name: 安装 XcodeGen
         run: brew install xcodegen
+
+      - name: 查看 Xcode 版本
+        run: xcodebuild -version
+
+      - name: 生成 Xcode 项目
+        run: |
+          xcodegen generate
+          echo "✅ .xcodeproj 已生成"
+          # 检查 scheme 是否正确生成
+          xcodebuild -project njupt_ios.xcodeproj -list
+
+      - name: 编译 (模拟器)
+        run: |
+          xcodebuild \
+            -project njupt_ios.xcodeproj \
+            -scheme njupt_ios \
+            -sdk iphonesimulator \
+            -configuration Release \
+            -derivedDataPath DerivedData \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log
+
+      - name: 检查编译结果
+        run: |
+          if grep -qE "BUILD (SUCCEEDED|SUCCESS)" build.log; then
+            echo "✅ 编译成功！代码无语法错误。"
+            echo ""
+            echo "📱 下一步：要安装到 iPhone，请："
+            echo "   1. 在 GitHub Actions 页面手动触发 'Build iOS App'"
+            echo "   2. 选择 'signed_device'"
+            echo "   3. 确保已配置 Apple 签名 Secrets"
+            echo "   或使用 AltStore / SideStore 侧载"
+          else
+            echo "❌ 编译失败！"
+            echo "=== 错误摘要 ==="
+            grep -E "error:|fatal error:" build.log || true
+            exit 1
+          fi
+
+  # ============================================================
+  # Job: 签名设备构建（需配置 Secrets，手动触发）
+  # ============================================================
+  build-signed:
+    name: Build & Sign (设备 IPA)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.signing == 'signed_device'
+
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 查看 Xcode 版本
+        run: xcodebuild -version
 
       - name: 生成 Xcode 项目
         run: |
           xcodegen generate
           echo "✅ .xcodeproj 已生成"
 
-      - name: 查看可用 Xcode 版本
-        run: xcodebuild -version
-
-      - name: 编译 (Build)
-        run: |
-          xcodebuild \
-            -project njupt_ios.xcodeproj \
-            -scheme njupt_ios \
-            -sdk iphoneos \
-            -configuration Release \
-            -derivedDataPath DerivedData \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            -destination 'generic/platform=iOS' \
-            build 2>&1 | tee build.log
-
-      - name: 检查编译结果
-        run: |
-          if grep -q "BUILD SUCCEEDED" build.log; then
-            echo "✅ 编译成功！"
-          else
-            echo "❌ 编译失败，请检查上方日志"
-            exit 1
-          fi
-
-      - name: 打包 .app 产物
-        run: |
-          APP_PATH=$(find DerivedData/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
-          if [ -d "$APP_PATH" ]; then
-            echo "发现 App: $APP_PATH"
-            zip -r njupt_ios_unsigned.zip "$APP_PATH"
-            echo "✅ 已打包为 njupt_ios_unsigned.zip"
-          else
-            echo "⚠️ 未找到 .app 产物（这通常是因为没有签名导致的）"
-          fi
-
-      - name: 上传编译产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: njupt_ios_unsigned
-          path: njupt_ios_unsigned.zip
-          if-no-files-found: warn
-
-  # ============================================================
-  # Job 2: 签名构建（需要配置 GitHub Secrets，手动触发）
-  # ============================================================
-  build-signed:
-    name: Build & Sign (签名构建)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.signing == 'true'
-
-    steps:
-      - name: 拉取代码
-        uses: actions/checkout@v4
-
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
-
-      - name: 生成 Xcode 项目
-        run: xcodegen generate
-
-      # ---- 导入签名证书 ----
       - name: 导入 Apple 开发证书
         env:
           P12_CERTIFICATE_BASE64: ${{ secrets.P12_CERTIFICATE_BASE64 }}
@@ -116,7 +116,6 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
-      # ---- Archive + Export IPA ----
       - name: 归档 (Archive)
         run: |
           xcodebuild archive \
@@ -128,11 +127,11 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.DEVELOPMENT_TEAM }} \
             CODE_SIGN_IDENTITY="iPhone Developer" \
             PROVISIONING_PROFILE_SPECIFIER="${{ secrets.PROVISIONING_PROFILE_NAME }}" \
-            archive
+            archive 2>&1 | tee archive.log
 
       - name: 导出 IPA
         run: |
-          cat > exportOptions.plist << EOF
+          cat > exportOptions.plist << 'PLISTEOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -140,21 +139,23 @@ jobs:
               <key>method</key>
               <string>development</string>
               <key>teamID</key>
-              <string>${{ secrets.DEVELOPMENT_TEAM }}</string>
+              <string>${DEVELOPMENT_TEAM}</string>
               <key>signingStyle</key>
               <string>manual</string>
           </dict>
           </plist>
-          EOF
+          PLISTEOF
+          # 替换环境变量
+          sed -i '' "s/\${DEVELOPMENT_TEAM}/${{ secrets.DEVELOPMENT_TEAM }}/g" exportOptions.plist
 
           xcodebuild -exportArchive \
             -archivePath DerivedData/Archive/njupt_ios.xcarchive \
             -exportOptionsPlist exportOptions.plist \
-            -exportPath DerivedData/IPA
+            -exportPath DerivedData/IPA 2>&1 | tee export.log
 
       - name: 上传签名 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: njupt_ios_signed
+          name: njupt_ios_signed.ipa
           path: DerivedData/IPA/*.ipa
           if-no-files-found: error
