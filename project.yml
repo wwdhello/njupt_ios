@@ -1,0 +1,36 @@
+name: njupt_ios
+
+options:
+  bundleIdPrefix: com.njupt.auth
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+
+targets:
+  njupt_ios:
+    type: application
+    platform: iOS
+    sources:
+      - path: njupt_ios
+    settings:
+      base:
+        INFOPLIST_FILE: njupt_ios/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.njupt.auth.njupt-ios
+        DEVELOPMENT_TEAM: ""          # 留空 = 不签名，仅编译验证
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone only
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    preBuildScripts:
+      - name: "SwiftLint (skip if missing)"
+        script: |
+          if which swiftlint >/dev/null; then
+            swiftlint
+          fi
+        basedOnDependencyAnalysis: false
