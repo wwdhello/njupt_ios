@@ -72,7 +72,7 @@ struct ContentView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(.gray.opacity(0.3), lineWidth: 1)
                     )
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
             // 一键连接按钮
