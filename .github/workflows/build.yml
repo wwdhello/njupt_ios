@@ -32,13 +32,18 @@ jobs:
 
       - name: 编译 (模拟器)
         run: |
+          # 先列出可用模拟器
+          echo "=== 可用模拟器 ==="
+          xcrun simctl list devices available | head -20
+          echo ""
+          # 用 generic destination 编译，避免设备名不匹配
           xcodebuild \
             -project njupt_ios.xcodeproj \
             -scheme njupt_ios \
             -sdk iphonesimulator \
             -configuration Debug \
             -derivedDataPath DerivedData \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
