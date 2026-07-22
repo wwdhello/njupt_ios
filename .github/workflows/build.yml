@@ -51,17 +51,17 @@ jobs:
             exit 1
           fi
 
-      - name: 打包 .app
+      - name: 打包为 .ipa
         run: |
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphoneos -name "*.app" -type d | head -1)
           if [ -d "$APP_PATH" ]; then
             echo "找到 App: $APP_PATH"
-            ls -la "$APP_PATH"
-            zip -r njupt_ios.zip "$APP_PATH"
-            echo "✅ 已打包"
+            mkdir Payload
+            cp -r "$APP_PATH" Payload/
+            zip -r njupt_ios.ipa Payload/
+            echo "✅ 已打包为 njupt_ios.ipa"
           else
             echo "⚠️ 未找到 .app"
-            find DerivedData -name "*.app" -type d 2>/dev/null || echo "无 .app 文件"
             exit 1
           fi
 
@@ -69,4 +69,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: njupt_ios_unsigned
-          path: njupt_ios.zip
+          path: njupt_ios.ipa
