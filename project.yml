@@ -18,6 +18,7 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "16.0"
         SWIFT_VERSION: "5.0"
     info:
+      path: njupt_ios/Info.plist
       properties:
         CFBundleName: NJUPT Auth
         CFBundleDisplayName: 校园网快捷认证
