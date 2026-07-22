@@ -1,0 +1,20 @@
+Run if grep -qE "\*\* BUILD SUCCEEDED" build.log; then
+  if grep -qE "\*\* BUILD SUCCEEDED" build.log; then
+    echo "✅ 编译成功！"
+  else
+    echo "❌ 编译失败！错误："
+    grep -nE "error:|fatal error:" build.log || echo "(未找到 error 行，可能是 XcodeGen 或配置问题)"
+    echo ""
+    echo "=== 警告 ==="
+    grep -nE "warning:" build.log | tail -20 || echo "(无警告)"
+    exit 1
+  fi
+  shell: /bin/bash -e {0}
+❌ 编译失败！错误：
+507:/Users/runner/work/njupt_ios/njupt_ios/njupt_ios/ContentView.swift:44:14: error: 'toolbarTitleDisplayMode' is only available in iOS 17.0 or newer
+519:/Users/runner/work/njupt_ios/njupt_ios/njupt_ios/ContentView.swift:121:58: error: value of type 'Font' has no member 'size'
+526:/Users/runner/work/njupt_ios/njupt_ios/njupt_ios/TokenProcessor.swift:58:19: error: initializer for conditional binding must have Optional type, not 'AES.GCM.Nonce'
+529:/Users/runner/work/njupt_ios/njupt_ios/njupt_ios/TokenProcessor.swift:58:31: error: call can throw but is not marked with 'try'
+
+=== 警告 ===
+Error: Process completed with exit code 1.

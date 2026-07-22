@@ -41,7 +41,7 @@ struct ContentView: View {
                 .allowsHitTesting(false)       // 不拦截触摸事件
             }
             .navigationTitle("校园网快捷认证")
-            .toolbarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 if token.isEmpty && !savedToken.isEmpty {
                     token = savedToken
@@ -118,7 +118,7 @@ struct ContentView: View {
                                 .foregroundStyle(.green)
                                 .padding(.top, 7)
                             Text(msg)
-                                .font(.body.monospaced().size(13))
+                                .font(.system(size: 13, design: .monospaced))
                         }
                     }
                 }

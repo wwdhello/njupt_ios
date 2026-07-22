@@ -55,9 +55,8 @@ enum TokenProcessor {
             let ciphertext = Data(combined.prefix(combined.count - tagLength))
             let tag = Data(combined.suffix(tagLength))
 
-            guard let nonce = AES.GCM.Nonce(data: nonceData) else {
-                throw TokenError.invalidNonce
-            }
+            // CryptoKit: init(data:) 是 throwing，不是 optional
+            let nonce = try AES.GCM.Nonce(data: nonceData)
             let key = SymmetricKey(data: Data(keyBytes))
             let sealedBox = try AES.GCM.SealedBox(
                 nonce: nonce,
