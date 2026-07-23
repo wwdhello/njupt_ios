@@ -51,17 +51,40 @@ jobs:
             exit 1
           fi
 
+      - name: 诊断 .app 结构
+        run: |
+          APP_PATH=$(find DerivedData/Build/Products/Debug-iphoneos -name "*.app" -type d | head -1)
+          echo "=== App 路径: $APP_PATH ==="
+          echo ""
+          echo "=== 目录结构 ==="
+          ls -laR "$APP_PATH" 2>/dev/null | head -80
+          echo ""
+          echo "=== Info.plist ==="
+          cat "$APP_PATH/Info.plist" 2>/dev/null || echo "(Info.plist 不存在!)"
+          echo ""
+          echo "=== 可执行文件 ==="
+          EXEC_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null || echo "")
+          echo "CFBundleExecutable = '$EXEC_NAME'"
+          if [ -n "$EXEC_NAME" ] && [ -f "$APP_PATH/$EXEC_NAME" ]; then
+            echo "✅ 可执行文件存在"
+            file "$APP_PATH/$EXEC_NAME"
+            echo ""
+            echo "=== 架构 ==="
+            lipo -info "$APP_PATH/$EXEC_NAME" 2>/dev/null || echo "lipo 不可用"
+          else
+            echo "❌ 可执行文件缺失: $APP_PATH/$EXEC_NAME"
+          fi
+
       - name: 打包为 .ipa
         run: |
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphoneos -name "*.app" -type d | head -1)
           if [ -d "$APP_PATH" ]; then
             echo "找到 App: $APP_PATH"
-            # 临时签名 (ad-hoc)，Sideloadly 重签时需要
             codesign --force --sign - "$APP_PATH" 2>&1 || echo "(ad-hoc 签名警告可忽略)"
             mkdir Payload
             cp -r "$APP_PATH" Payload/
             zip -ry njupt_ios.ipa Payload/
-            echo "✅ 已打包为 njupt_ios.ipa"
+            echo "✅ 已打包"
           else
             echo "⚠️ 未找到 .app"
             exit 1
