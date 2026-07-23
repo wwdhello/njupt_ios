@@ -56,9 +56,11 @@ jobs:
           APP_PATH=$(find DerivedData/Build/Products/Debug-iphoneos -name "*.app" -type d | head -1)
           if [ -d "$APP_PATH" ]; then
             echo "找到 App: $APP_PATH"
+            # 临时签名 (ad-hoc)，Sideloadly 重签时需要
+            codesign --force --sign - "$APP_PATH" 2>&1 || echo "(ad-hoc 签名警告可忽略)"
             mkdir Payload
             cp -r "$APP_PATH" Payload/
-            zip -r njupt_ios.ipa Payload/
+            zip -ry njupt_ios.ipa Payload/
             echo "✅ 已打包为 njupt_ios.ipa"
           else
             echo "⚠️ 未找到 .app"
