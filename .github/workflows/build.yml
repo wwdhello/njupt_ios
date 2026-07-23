@@ -55,30 +55,41 @@ jobs:
         run: |
           APP_PATH=$(find DerivedData/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
           echo "=== App: $APP_PATH ==="
+          echo "=== 完整目录 ==="
+          ls -laR "$APP_PATH"
           echo ""
-          echo "=== 目录结构 ==="
-          ls -laR "$APP_PATH" | head -50
+          echo "=== Info.plist 是否存在 ==="
+          test -f "$APP_PATH/Info.plist" && echo "✅ Info.plist OK" || echo "❌ Info.plist 缺失!"
           echo ""
-          echo "=== Mach-O load commands ==="
-          EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null || echo "njupt_ios")
-          otool -l "$APP_PATH/$EXEC" 2>/dev/null | grep -A3 -E "cmd LC_(BUILD_VERSION|VERSION_MIN)" | head -20
-          echo ""
-          echo "=== 签名状态 ==="
-          codesign -dvv "$APP_PATH" 2>&1 || echo "(无签名)"
+          EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null || echo "MISSING")
+          echo "CFBundleExecutable = $EXEC"
+          echo "=== Mach-O ==="
+          otool -l "$APP_PATH/$EXEC" 2>/dev/null | grep -A3 "cmd LC_BUILD_VERSION" | head -10
 
-      - name: 打包为 .ipa
+      - name: 签名 + 打包 IPA
         run: |
           APP_PATH=$(find DerivedData/Build/Products/Release-iphoneos -name "*.app" -type d | head -1)
-          if [ -d "$APP_PATH" ]; then
-            echo "找到 App: $APP_PATH"
-            # 转 XML plist (有的工具不认二进制)
-            plutil -convert xml1 "$APP_PATH/Info.plist" 2>&1 || true
-            # ad-hoc 签名
-            codesign --force --sign - --timestamp=none "$APP_PATH" 2>&1 || true
-            # 打包 (store 模式 = 不压缩)
-            mkdir Payload
-            cp -r "$APP_PATH" Payload/
-            zip -r0 njupt_ios.ipa Payload/
+          echo "找到 App: $APP_PATH"
+          # XML plist
+          plutil -convert xml1 "$APP_PATH/Info.plist" 2>&1 || true
+          # 方案A: codesign ad-hoc (打印错误，不吞)
+          echo "=== 尝试 codesign ==="
+          codesign --force --sign - "$APP_PATH" 2>&1
+          # 方案B: 如果 codesign 失败，用 ldid
+          if ! codesign -dvv "$APP_PATH" 2>/dev/null | grep -q "Signature"; then
+            echo "codesign 未生效，尝试 ldid..."
+            brew install ldid 2>&1 | tail -3
+            EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null)
+            ldid -S "$APP_PATH/$EXEC" 2>&1
+            echo "ldid 完成, 签名状态:"
+            codesign -dvv "$APP_PATH" 2>&1 || echo "(仍无签名)"
+          fi
+          # 打包
+          mkdir Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r0 njupt_ios.ipa Payload/
+          rm -rf Payload
+          echo "✅ IPA 已打包"
           else
             echo "⚠️ 未找到 .app"
             exit 1
