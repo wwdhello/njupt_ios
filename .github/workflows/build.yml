@@ -38,7 +38,6 @@ jobs:
             -derivedDataPath DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
             build 2>&1 | tee build.log
 
       - name: 编译结果
@@ -72,17 +71,19 @@ jobs:
           echo "找到 App: $APP_PATH"
           # XML plist
           plutil -convert xml1 "$APP_PATH/Info.plist" 2>&1 || true
-          # 方案A: codesign ad-hoc (打印错误，不吞)
-          echo "=== 尝试 codesign ==="
-          codesign --force --sign - "$APP_PATH" 2>&1
-          # 方案B: 如果 codesign 失败，用 ldid
-          if ! codesign -dvv "$APP_PATH" 2>/dev/null | grep -q "Signature"; then
+          # ad-hoc 签名 (现在二进制有签名槽了)
+          echo "=== ad-hoc 签名 ==="
+          codesign --force --deep --sign - "$APP_PATH" 2>&1
+          echo ""
+          echo "=== 签名验证 ==="
+          codesign -dvv "$APP_PATH" 2>&1
+          echo ""
+          # 如果 codesign 仍失败，用 ldid 备选
+          if ! codesign -dvv "$APP_PATH" 2>/dev/null | grep -q "adhoc"; then
             echo "codesign 未生效，尝试 ldid..."
             brew install ldid 2>&1 | tail -3
             EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Info.plist" 2>/dev/null)
             ldid -S "$APP_PATH/$EXEC" 2>&1
-            echo "ldid 完成, 签名状态:"
-            codesign -dvv "$APP_PATH" 2>&1 || echo "(仍无签名)"
           fi
           # 打包
           mkdir Payload
